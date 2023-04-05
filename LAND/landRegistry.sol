@@ -1,4 +1,4 @@
-/**
+/*
  *Submitted for verification at Etherscan.io on 2022-03-12
 */
 
@@ -27,6 +27,76 @@ contract OwnableStorage {
 
 }
 
+interface IERC20 {
+    /**
+     * @dev Returns the amount of tokens in existence.
+     */
+    function totalSupply() external view returns (uint256);
+
+    /**
+     * @dev Returns the amount of tokens owned by `account`.
+     */
+    function balanceOf(address account) external view returns (uint256);
+
+    /**
+     * @dev Moves `amount` tokens from the caller's account to `recipient`.
+     *
+     * Returns a boolean value indicating whether the operation succeeded.
+     *
+     * Emits a `Transfer` event.
+     */
+    function transfer(address recipient, uint256 amount) external returns (bool);
+
+    /**
+     * @dev Returns the remaining number of tokens that `spender` will be
+     * allowed to spend on behalf of `owner` through `transferFrom`. This is
+     * zero by default.
+     *
+     * This value changes when `approve` or `transferFrom` are called.
+     */
+    function allowance(address owner, address spender) external view returns (uint256);
+
+    /**
+     * @dev Sets `amount` as the allowance of `spender` over the caller's tokens.
+     *
+     * Returns a boolean value indicating whether the operation succeeded.
+     *
+     * > Beware that changing an allowance with this method brings the risk
+     * that someone may use both the old and the new allowance by unfortunate
+     * transaction ordering. One possible solution to mitigate this race
+     * condition is to first reduce the spender's allowance to 0 and set the
+     * desired value afterwards:
+     * https://github.com/ethereum/EIPs/issues/20#issuecomment-263524729
+     *
+     * Emits an `Approval` event.
+     */
+    function approve(address spender, uint256 amount) external returns (bool);
+
+    /**
+     * @dev Moves `amount` tokens from `sender` to `recipient` using the
+     * allowance mechanism. `amount` is then deducted from the caller's
+     * allowance.
+     *
+     * Returns a boolean value indicating whether the operation succeeded.
+     *
+     * Emits a `Transfer` event.
+     */
+    function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
+
+    /**
+     * @dev Emitted when `value` tokens are moved from one account (`from`) to
+     * another (`to`).
+     *
+     * Note that `value` may be zero.
+     */
+    event Transfer(address indexed from, address indexed to, uint256 value);
+
+    /**
+     * @dev Emitted when the allowance of a `spender` for an `owner` is set by
+     * a call to `approve`. `value` is the new allowance.
+     */
+    event Approval(address indexed owner, address indexed spender, uint256 value);
+}
 // File: erc821/contracts/AssetRegistryStorage.sol
 
 contract AssetRegistryStorage {
@@ -596,8 +666,8 @@ contract ERC721Base is AssetRegistryStorage, IERC721Base, ERC165 {
     _;
   }
 
-  modifier onlyAuthorized(uint256 assetId) {
-    require(_isAuthorized(msg.sender, assetId));
+  modifier onlyAuthorized(address sender,uint256 assetId) {
+    require(_isAuthorized(sender, assetId));
     _;
   }
 
@@ -661,7 +731,7 @@ contract ERC721Base is AssetRegistryStorage, IERC721Base, ERC165 {
     bytes userData,
     bool doCheck
   )
-    onlyAuthorized(assetId)
+    onlyAuthorized(from,assetId)
     internal
   {
     _moveToken(from, to, assetId, userData, doCheck);
@@ -954,17 +1024,96 @@ interface ILANDRegistry {
 contract IMetadataHolder is ERC165 {
   function getMetadata(uint256 /* assetId */) external view returns (string);
 }
+contract ERC20Basic {
+  function totalSupply() public view returns (uint256);
+  function balanceOf(address _who) public view returns (uint256);
+  function transfer(address _to, uint256 _value) public returns (bool);
+  event Transfer(address indexed from, address indexed to, uint256 value);
+}
+library Address {
+    /**
+     * @dev Returns true if `account` is a contract.
+     *
+     * This test is non-exhaustive, and there may be false-negatives: during the
+     * execution of a contract's constructor, its address will be reported as
+     * not containing a contract.
+     *
+     * > It is unsafe to assume that an address for which this function returns
+     * false is an externally-owned account (EOA) and not a contract.
+     */
+    function isContract(address account) internal view returns (bool) {
+        // This method relies in extcodesize, which returns 0 for contracts in
+        // construction, since the code is only stored at the end of the
+        // constructor execution.
 
+        uint256 size;
+        // solhint-disable-next-line no-inline-assembly
+        assembly { size := extcodesize(account) }
+        return size > 0;
+    }
+}
+contract ERC20 is ERC20Basic {
+  function allowance(address _owner, address _spender)
+    public view returns (uint256);
+
+  function transferFrom(address _from, address _to, uint256 _value)
+    public returns (bool);
+
+  function approve(address _spender, uint256 _value) public returns (bool);
+  event Approval(
+    address indexed owner,
+    address indexed spender,
+    uint256 value
+  );
+}
+
+library SafeERC20 {
+  function safeTransfer(
+    ERC20Basic _token,
+    address _to,
+    uint256 _value
+  )
+    internal
+  {
+    require(_token.transfer(_to, _value));
+  }
+
+  function safeTransferFrom(
+    ERC20 _token,
+    address _from,
+    address _to,
+    uint256 _value
+  )
+    internal
+  {
+    require(_token.transferFrom(_from, _to, _value));
+  }
+
+  function safeApprove(
+    ERC20 _token,
+    address _spender,
+    uint256 _value
+  )
+    internal
+  {
+    require(_token.approve(_spender, _value));
+  }
+}
 // File: contracts/land/LANDRegistry.sol
 
 /* solium-disable function-order */
 contract LANDRegistry is Storage, Ownable, FullAssetRegistry, ILANDRegistry {
+  using SafeERC20 for IERC20;
+  address public dimeToken;
+  address public treasury;
   bytes4 constant public GET_METADATA = bytes4(keccak256("getMetadata(uint256)"));
 
-  function initialize(bytes) external {
-    _name = "Decentraland LAND";
-    _symbol = "LAND";
-    _description = "Contract that stores the Decentraland LAND registry";
+  function initialize(IERC20 _token,address _treasury) external {
+    _name = "Divine Dimension";
+    _symbol = "DIVINE";
+    _description = "Contract that stores the Divine Dimension LAND ";
+    dimeToken = _token;
+    treasury = _treasury;
   }
 
   modifier onlyProxyOwner() {
@@ -973,12 +1122,14 @@ contract LANDRegistry is Storage, Ownable, FullAssetRegistry, ILANDRegistry {
   }
 
   modifier onlyDeployer() {
-    require(
-      msg.sender == proxyOwner || authorizedDeploy[msg.sender],
-      "This function can only be called by an authorized deployer"
-    );
+    // require(
+    //   msg.sender == proxyOwner || authorizedDeploy[msg.sender],
+    //   "This function can only be called by an authorized deployer"
+    // );
+    require(msg.sender == owner,"Owner only able to call the function");
     _;
   }
+
 
   modifier onlyOwnerOf(uint256 assetId) {
     require(
@@ -1191,6 +1342,107 @@ contract LANDRegistry is Storage, Ownable, FullAssetRegistry, ILANDRegistry {
     );
   }
 
+  //Transfer land to this contract(i.e for sale);
+  struct details{
+    uint256 price;
+    address lister;
+  }
+  mapping (uint256 => details) public assetPrice;
+  function putForSale(uint256[] assetId,uint256[] price) external {
+    for (uint i = 0; i < assetId.length; i++) {
+      assetPrice[assetId[i]].price = price[i];
+      assetPrice[assetId[i]].lister = msg.sender;
+      _doTransferFrom(msg.sender,address(this), assetId[i],"",false);
+    }
+   
+  }
+
+  function buynow(uint256 _assetId) external payable{
+    uint256 price = assetPrice[_assetId].price;
+    address lister = assetPrice[_assetId].lister;
+    uint256 twopercentage = (price * 2)/100;
+    uint256 balancepercent = price - twopercentage;
+    IERC20(dimeToken).transferFrom(msg.sender,lister,balancepercent);
+    _doTransferFrom(address(this),msg.sender, _assetId,"",false);
+    IERC20(dimeToken).transferFrom(msg.sender,address(this),twopercentage);
+    assetPrice[_assetId].price = 0;
+    assetPrice[_assetId].lister = 0x0000000000000000000000000000000000000000;
+
+  }
+
+  struct Auction {
+    uint256 tokenId;
+    address highestBidder;
+    uint256 highestBid;
+    uint256 startTime;
+    uint256 endTime;
+    uint256 price;
+    address creator;
+    bool ended;
+  }
+
+  mapping (uint256 => Auction) public parcelAuctions;
+
+  event AuctionCreated(uint256 indexed tokenId, uint256 startTime, uint256 endTime);
+  event AuctionEnded(uint256 indexed tokenId, address indexed winner, uint256 indexed winningBid);
+  event HighestBidIncreased(uint256 indexed tokenId, address indexed bidder, uint256 indexed bidAmount);
+
+ function createAuction(uint256 tokenId, uint256 startPrice, uint256 duration) external  {
+    // require(parcelAuctions[tokenId].ended!, "Auction for this parcel is already ongoing");
+    require(startPrice > 0, "Starting price must be greater than zero");
+    require(duration > block.timestamp, "Duration must be greater than zero");
+
+    uint256 endTime =  duration;
+    parcelAuctions[tokenId] = Auction(tokenId, (address(0)), 0, block.timestamp, endTime, startPrice, msg.sender, false);
+    _doTransferFrom(msg.sender,address(this), tokenId,"",false);
+    emit AuctionCreated(tokenId, block.timestamp, endTime);
+  }
+
+  function callin() external {
+    IERC20(dimeToken).approve(address(this),10000);
+    IERC20(dimeToken).transfer(msg.sender,100);
+  }
+
+  function placeBid(uint256 tokenId,uint256 amount) external  {
+    Auction storage auction = parcelAuctions[tokenId];
+    require(auction.startTime <= block.timestamp, "Auction has not started yet");
+    require(!auction.ended, "Auction has already ended");
+    require(amount > auction.highestBid, "Bid must be higher than current highest bid");
+    require(amount > auction.price, "Bid must be higher than current price");
+
+    if (auction.highestBid > 0) {
+      IERC20(dimeToken).transferFrom(address(this),auction.highestBidder,auction.highestBid);
+      // auction.highestBidder.transfer(auction.highestBid);
+    }
+    
+
+    auction.highestBidder = (msg.sender);
+    auction.highestBid = amount;
+    IERC20(dimeToken).transferFrom(msg.sender,address(this),amount);
+
+    emit HighestBidIncreased(tokenId, msg.sender, amount);
+  }
+
+   function endAuction(uint256 tokenId) external {
+    Auction storage auction = parcelAuctions[tokenId];
+    require(auction.endTime <= block.timestamp, "Auction has not yet ended");
+    require(!auction.ended, "Auction has already ended");
+
+    auction.ended = true;
+
+    if (auction.highestBidder != address(0)) {
+      // _transfer(, tokenId);
+      _doTransferFrom(address(this),auction.highestBidder ,tokenId,"",false);
+      IERC20(dimeToken).transferFrom(address(this),auction.creator,auction.highestBid);
+      parcelAuctions[tokenId] = Auction(tokenId, (address(0)), 0, 0, 0, 0,(address(0)), true);
+      emit AuctionEnded(tokenId, auction.highestBidder, auction.highestBid);
+    } else {
+      emit AuctionEnded(tokenId, address(0), 0);
+    }
+  }
+
+
+
   function transferLand(int x, int y, address to) external {
     uint256 tokenId = _encodeTokenId(x, y);
     _doTransferFrom(
@@ -1316,7 +1568,8 @@ contract LANDRegistry is Storage, Ownable, FullAssetRegistry, ILANDRegistry {
 
   event EstateRegistrySet(address indexed registry);
 
-  function setEstateRegistry(address registry) external onlyProxyOwner {
+  function setEstateRegistry(address registry) external  {
+    require(msg.sender == owner,"Owner only able to call the function");
     estateRegistry = IEstateRegistry(registry);
     emit EstateRegistrySet(registry);
   }
