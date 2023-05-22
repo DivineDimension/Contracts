@@ -1846,27 +1846,32 @@ function withdrawLand(uint256 landId) public {
 }
 
 //anyone mint
-   int256 private yaxissmall = 0;
+   int256 public  yaxissmall = 0;
    uint256 priceamount=10000000000000000;
-  function smallLandMint() external {
+  function smallLandMint() external payable  {
       require(yaxissmall <=50,"Limit reached");
+      require(msg.value == priceamount,"Given amount is less");
   _generate(_encodeTokenId(1, yaxissmall), address(this));
     _updateLandBalance(address(0), address(this));
    uint256 tokenId = _encodeTokenId(1, yaxissmall);
     assetPrice[tokenId].price = priceamount;
     assetPrice[tokenId].lister = msg.sender;
     yaxissmall=yaxissmall +1;
+    treasury.transfer(msg.value);
+    
   }
 //anyone
-   int256 private yaxismedium = 0;
-   function mediumLandMint() external {
+   int256 public  yaxismedium = 0;
+   function mediumLandMint() external payable  {
     require(yaxismedium <=100,"Limit reached");
+    require(msg.value == priceamount,"Given amount is less");
     _generate(_encodeTokenId(11, yaxismedium), address(this));
     _updateLandBalance(address(0), address(this));
-     uint256 tokenId = _encodeTokenId(1, yaxismedium);
+     uint256 tokenId = _encodeTokenId(11, yaxismedium);
     assetPrice[tokenId].price = priceamount;
     assetPrice[tokenId].lister = msg.sender;
     yaxismedium=yaxismedium +1;
+    treasury.transfer(msg.value);
   }
 
 }
